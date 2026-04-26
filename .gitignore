@@ -1,0 +1,9 @@
+node_modules/
+__pycache__/
+*.pyc
+.DS_Store
+Ref.photo/
+generate_characters.py
+generate_sprites.py
+remove_backgrounds.py
+restyle_assets.py

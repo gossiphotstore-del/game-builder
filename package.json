@@ -1,0 +1,20 @@
+{
+  "name": "roma-birthday-game",
+  "version": "1.0.0",
+  "description": "HTML5 мини-игра «Поздравление для Романа» — side-scroller на Phaser 3",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "live-server --port=8080 --open=index.html",
+    "dev": "live-server --port=8080 --open=index.html",
+    "check": "node --check src/main.js && node --check src/constants.js && node --check src/scenes/BootScene.js && node --check src/scenes/StartScene.js && node --check src/scenes/GameScene.js && node --check src/scenes/FinalScene.js && node --check src/scenes/RouletteScene.js && node --check src/scenes/EndScene.js && echo 'All JS syntax OK'"
+  },
+  "dependencies": {
+    "phaser": "^3.80.1"
+  },
+  "devDependencies": {
+    "live-server": "^1.2.2"
+  },
+  "keywords": ["phaser3", "html5", "game", "birthday"],
+  "author": "Rita",
+  "license": "MIT"
+}
