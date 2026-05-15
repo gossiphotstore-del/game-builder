@@ -59,54 +59,9 @@
     }
     /* END_BLOCK_RESET */
 
-    /* START_BLOCK_PORTRAIT_OVERLAY: Подсказка поворота при вертикальной ориентации */
-    /* Portrait-overlay лежит поверх game-container через z-index.
-       game-container НЕ скрывается — Phaser должен видеть контейнер для корректного resize. */
-    #portrait-overlay {
-      display: none;
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: #1a1a2e;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      text-align: center;
-      color: #f0c040;
-      z-index: 9999;
-      padding: 32px;
-      gap: 12px;
-    }
-
-    .portrait-icon {
-      font-size: 72px;
-      animation: rotate-hint 2.5s ease-in-out infinite;
-    }
-
-    .portrait-title {
-      font-size: 22px;
-      font-weight: bold;
-    }
-
-    .portrait-hint {
-      font-size: 14px;
-      color: #aaa;
-      max-width: 260px;
-    }
-
-    @keyframes rotate-hint {
-      0%, 30%  { transform: rotate(0deg); }
-      60%, 90% { transform: rotate(-90deg); }
-      100%     { transform: rotate(0deg); }
-    }
-
-    @media (orientation: portrait) {
-      #portrait-overlay { display: flex; }
-      /* game-container остаётся видимым — overlay перекрывает его через z-index */
-    }
-    /* END_BLOCK_PORTRAIT_OVERLAY */
+    /* START_BLOCK_PORTRAIT_SUPPORT: Поддержка вертикальной ориентации */
+    /* Масштабирование canvas управляется через fitCanvas() в JS — поддерживает любую ориентацию. */
+    /* END_BLOCK_PORTRAIT_SUPPORT */
 
     /* START_BLOCK_LOADING: Индикатор загрузки до инициализации Phaser */
     #loading-screen {
@@ -148,12 +103,6 @@
 <body>
 
   <!-- START_BLOCK_DOM: Корневые DOM-элементы -->
-  <div id="portrait-overlay">
-    <div class="portrait-icon">⟳</div>
-    <div class="portrait-title">Переверните телефон</div>
-    <div class="portrait-hint">Игра работает в горизонтальной ориентации</div>
-  </div>
-
   <div id="loading-screen">
     <div class="loading-title">Загружаем игру для {{PLAYER_NAME}}...</div>
   </div>
@@ -222,31 +171,38 @@
   <!-- END_BLOCK_SCRIPTS -->
 
   <script>
-    // START_BLOCK_LOADING_HIDE: Скрыть загрузочный экран после инициализации Phaser
+    // START_BLOCK_FIT_CANVAS: CSS cover-масштабирование canvas — надёжная замена Phaser Scale.ENVELOP.
+    // Phaser Scale.ENVELOP некорректно работает на iOS Safari (читает viewport до layout).
+    // Scale.NONE + fitCanvas() вместо этого: вычисляем scale = max(sw/800, sh/450),
+    // задаём canvas CSS width/height/left/top явно. Phaser input корректно пересчитывает
+    // координаты через getBoundingClientRect() — touch/click-позиции не ломаются.
+    function fitCanvas() {
+      var canvas = document.querySelector('#game-container canvas');
+      if (!canvas) return;
+      var sw = window.innerWidth;
+      var sh = window.innerHeight;
+      var scale = Math.max(sw / 800, sh / 450);
+      var w = Math.round(800 * scale);
+      var h = Math.round(450 * scale);
+      canvas.style.position = 'absolute';
+      canvas.style.width    = w + 'px';
+      canvas.style.height   = h + 'px';
+      canvas.style.left     = Math.round((sw - w) / 2) + 'px';
+      canvas.style.top      = Math.round((sh - h) / 2) + 'px';
+      canvas.style.margin   = '0';
+    }
+
     window.addEventListener('load', function () {
-      if (screen.orientation && screen.orientation.lock) {
-        screen.orientation.lock('landscape').catch(function () {});
-      }
       setTimeout(function () {
         var loadingScreen = document.getElementById('loading-screen');
-        if (loadingScreen) {
-          loadingScreen.classList.add('hidden');
-        }
+        if (loadingScreen) { loadingScreen.classList.add('hidden'); }
       }, 300);
+      setTimeout(fitCanvas, 200);
+      setTimeout(fitCanvas, 600);
     });
-    // END_BLOCK_LOADING_HIDE
-
-    // START_BLOCK_ORIENTATION_REFRESH: Принудительный refresh Scale Manager при смене ориентации
-    function refreshPhaserScale() {
-      setTimeout(function () {
-        if (window.game && window.game.scale) {
-          window.game.scale.refresh();
-        }
-      }, 200);
-    }
-    window.addEventListener('orientationchange', refreshPhaserScale);
-    window.addEventListener('resize', refreshPhaserScale);
-    // END_BLOCK_ORIENTATION_REFRESH
+    window.addEventListener('resize',            function () { setTimeout(fitCanvas, 200); });
+    window.addEventListener('orientationchange', function () { setTimeout(fitCanvas, 300); });
+    // END_BLOCK_FIT_CANVAS
   </script>
 
 </body>

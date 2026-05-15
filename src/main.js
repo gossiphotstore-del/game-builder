@@ -42,8 +42,8 @@
       EndScene
     ],
     scale: {
-      mode:       Phaser.Scale.ENVELOP,
-      autoCenter: Phaser.Scale.CENTER_BOTH
+      mode:       Phaser.Scale.NONE,
+      autoCenter: Phaser.Scale.NO_CENTER
     }
   };
   // END_BLOCK_PHASER_CONFIG
