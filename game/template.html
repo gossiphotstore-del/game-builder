@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<!--
+  FILE: game/template.html
+  VERSION: 1.0.0
+  PURPOSE: Шаблон HTML-файла игры с плейсхолдерами для game_builder.py.
+           Двойные фигурные скобки (см. PLACEHOLDERS ниже) заменяются Python-скриптом при сборке.
+           Содержит блок инжекции window.GAME_CONFIG для динамической конфигурации.
+  SCOPE: Bootstrap — корневая оболочка приложения с поддержкой персонализации.
+  PLACEHOLDERS: {{PLAYER_NAME}}, {{HERO_SPRITE_URL}}, {{COMPANION_SPRITE_URL}},
+                {{HAS_COMPANION}}, {{SCENARIO}}, {{HERO_GENDER}}
+-->
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <title>Игра для {{PLAYER_NAME}}</title>
+  <style>
+    /* START_BLOCK_RESET: Базовый сброс стилей и полноэкранный игровой холст */
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #1a1a2e;
+    }
+
+    body {
+      font-family: 'Arial', sans-serif;
+      touch-action: none;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    /* BUG_FIX_CONTEXT: display:flex на контейнере конфликтовал с Phaser Scale.ENVELOP —
+       Phaser центрирует canvas через отрицательные margin (marginLeft/marginTop),
+       но отрицательные margins flex-item не дают нужного смещения. Также display:none
+       в portrait-режиме мешало Phaser измерять размеры контейнера.
+       Решение: position:fixed + overflow:hidden, без flex. Portrait-overlay поверх (z-index). */
+    #game-container {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+    }
+
+    #game-container canvas {
+      display: block;
+      touch-action: none;
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
+    }
+    /* END_BLOCK_RESET */
+
+    /* START_BLOCK_PORTRAIT_OVERLAY: Подсказка поворота при вертикальной ориентации */
+    /* Portrait-overlay лежит поверх game-container через z-index.
+       game-container НЕ скрывается — Phaser должен видеть контейнер для корректного resize. */
+    #portrait-overlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: #1a1a2e;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      color: #f0c040;
+      z-index: 9999;
+      padding: 32px;
+      gap: 12px;
+    }
+
+    .portrait-icon {
+      font-size: 72px;
+      animation: rotate-hint 2.5s ease-in-out infinite;
+    }
+
+    .portrait-title {
+      font-size: 22px;
+      font-weight: bold;
+    }
+
+    .portrait-hint {
+      font-size: 14px;
+      color: #aaa;
+      max-width: 260px;
+    }
+
+    @keyframes rotate-hint {
+      0%, 30%  { transform: rotate(0deg); }
+      60%, 90% { transform: rotate(-90deg); }
+      100%     { transform: rotate(0deg); }
+    }
+
+    @media (orientation: portrait) {
+      #portrait-overlay { display: flex; }
+      /* game-container остаётся видимым — overlay перекрывает его через z-index */
+    }
+    /* END_BLOCK_PORTRAIT_OVERLAY */
+
+    /* START_BLOCK_LOADING: Индикатор загрузки до инициализации Phaser */
+    #loading-screen {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: #1a1a2e;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: #f0c040;
+      font-size: 24px;
+      z-index: 999;
+      transition: opacity 0.5s ease;
+    }
+
+    #loading-screen.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .loading-title {
+      font-size: 32px;
+      font-weight: bold;
+      margin-bottom: 16px;
+      text-shadow: 0 0 12px rgba(240, 192, 64, 0.8);
+    }
+
+    .loading-subtitle {
+      font-size: 16px;
+      color: #aaa;
+    }
+    /* END_BLOCK_LOADING */
+  </style>
+</head>
+<body>
+
+  <!-- START_BLOCK_DOM: Корневые DOM-элементы -->
+  <div id="portrait-overlay">
+    <div class="portrait-icon">⟳</div>
+    <div class="portrait-title">Переверните телефон</div>
+    <div class="portrait-hint">Игра работает в горизонтальной ориентации</div>
+  </div>
+
+  <div id="loading-screen">
+    <div class="loading-title">Загружаем игру для {{PLAYER_NAME}}...</div>
+  </div>
+
+  <div id="game-container"></div>
+  <!-- END_BLOCK_DOM -->
+
+  <!-- START_BLOCK_SCRIPTS: Подключение Phaser и игровой логики -->
+  <!--
+    Порядок загрузки важен: GAME_CONFIG → Phaser → тексты → константы → системы → UI → сущности → сцены → main.
+    GAME_CONFIG инжектируется первым — до всех игровых скриптов.
+  -->
+
+  <!-- GAME_CONFIG_INJECT -->
+  <script>
+  window.GAME_CONFIG = {
+    PLAYER_NAME:          "{{PLAYER_NAME}}",
+    HERO_SPRITE_URL:      "{{HERO_SPRITE_URL}}",
+    COMPANION_SPRITE_URL: "{{COMPANION_SPRITE_URL}}",
+    HAS_COMPANION:         {{HAS_COMPANION}},
+    SCENARIO:             "{{SCENARIO}}",
+    HERO_GENDER:          "{{HERO_GENDER}}",
+    ASSETS_BASE:          "../../"
+  };
+  </script>
+  <!-- END_GAME_CONFIG_INJECT -->
+
+  <script src="https://cdn.jsdelivr.net/npm/phaser@3.80.1/dist/phaser.min.js"></script>
+
+  <!-- Статические ассеты лежат в корне gh-pages (src/, assets/).
+       HTML находится в games/{id}/index.html → ../../ ведёт к корню репозитория. -->
+
+  <!-- 1. Константы (нет зависимостей) -->
+  <script src="../../src/constants.js"></script>
+
+  <!-- 2. Гендерно-адаптированные тексты (зависит только от GAME_CONFIG) -->
+  <script src="../../src/data/texts.js"></script>
+
+  <!-- 3. Системы без зависимостей от сцен -->
+  <script src="../../src/systems/ScoreSystem.js"></script>
+  <script src="../../src/systems/MusicSystem.js"></script>
+
+  <!-- 4. UI-компоненты -->
+  <script src="../../src/ui/HUD.js"></script>
+  <script src="../../src/ui/Roulette.js"></script>
+
+  <!-- 5. Игровые сущности -->
+  <script src="../../src/entities/Player.js"></script>
+  <script src="../../src/entities/Obstacle.js"></script>
+  <script src="../../src/entities/Collectible.js"></script>
+
+  <!-- 6. Оставшиеся системы (зависят от сущностей) -->
+  <script src="../../src/systems/InputSystem.js"></script>
+  <script src="../../src/systems/SpawnSystem.js"></script>
+
+  <!-- 7. Сцены (зависят от всего выше) -->
+  <script src="../../src/scenes/BootScene.js"></script>
+  <script src="../../src/scenes/StartScene.js"></script>
+  <script src="../../src/scenes/GameScene.js"></script>
+  <script src="../../src/scenes/FinalScene.js"></script>
+  <script src="../../src/scenes/RouletteScene.js"></script>
+  <script src="../../src/scenes/EndScene.js"></script>
+
+  <!-- 8. Точка входа (последний) -->
+  <script src="../../src/main.js"></script>
+  <!-- END_BLOCK_SCRIPTS -->
+
+  <script>
+    // START_BLOCK_LOADING_HIDE: Скрыть загрузочный экран после инициализации Phaser
+    window.addEventListener('load', function () {
+      if (screen.orientation && screen.orientation.lock) {
+        screen.orientation.lock('landscape').catch(function () {});
+      }
+      setTimeout(function () {
+        var loadingScreen = document.getElementById('loading-screen');
+        if (loadingScreen) {
+          loadingScreen.classList.add('hidden');
+        }
+      }, 300);
+    });
+    // END_BLOCK_LOADING_HIDE
+
+    // START_BLOCK_ORIENTATION_REFRESH: Принудительный refresh Scale Manager при смене ориентации
+    function refreshPhaserScale() {
+      setTimeout(function () {
+        if (window.game && window.game.scale) {
+          window.game.scale.refresh();
+        }
+      }, 200);
+    }
+    window.addEventListener('orientationchange', refreshPhaserScale);
+    window.addEventListener('resize', refreshPhaserScale);
+    // END_BLOCK_ORIENTATION_REFRESH
+  </script>
+
+</body>
+</html>

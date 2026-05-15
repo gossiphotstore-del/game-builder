@@ -1,0 +1,69 @@
+# =============================================================================
+# Telegram Bot dependencies (FS-1: Bot Core + FSM Dialog)
+# =============================================================================
+
+# Telegram Bot framework — async, FSM-диалоги, InlineKeyboard
+aiogram==3.13.1
+
+# Async HTTP-клиент к FastAPI бэкенду
+aiohttp==3.10.10
+
+# Настройки из .env с типизацией Pydantic
+pydantic-settings==2.6.1
+
+# Обработка изображений — валидация размера фото ≥300×300px
+Pillow==11.0.0
+
+# Загрузка .env переменных окружения
+python-dotenv==1.0.1
+
+# =============================================================================
+# Testing
+# =============================================================================
+
+# Тест-фреймворк
+pytest==8.3.3
+
+# Async тесты (для aiogram handlers)
+pytest-asyncio==0.24.0
+
+# =============================================================================
+# Backend dependencies (FS-4: FastAPI + Redis + Game Builder + GitHub Publisher)
+# =============================================================================
+
+# FastAPI backend framework
+fastapi>=0.115.0
+
+# ASGI server для FastAPI
+uvicorn>=0.30.0
+
+# Async Redis client (сессии, TTL 72ч тест-версия)
+redis[asyncio]>=5.0.0
+
+# Тест-версия: fake Redis in-memory (без реального сервера)
+fakeredis>=2.20.0
+
+# HTTPX для async FastAPI тестов
+httpx>=0.25.0
+
+# =============================================================================
+# Backend dependencies (FS-3: AI Pipeline)
+# =============================================================================
+
+# Replicate API client for InstantID sprite generation
+replicate>=1.0.0
+
+# Background removal via ONNX U2Net model
+rembg>=2.0.0
+
+# K-Means clustering for accent color extraction
+scikit-learn>=1.3.0
+
+# Array operations for pixel manipulation (already in top, Pillow covers image I/O)
+numpy>=1.24.0
+
+# ONNX runtime — required by rembg for U2Net inference
+onnxruntime>=1.16.0
+
+# pymatting — required by rembg for alpha matting (install without transitive numba/llvmlite)
+pymatting>=1.1.0

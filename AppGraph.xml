@@ -1,0 +1,204 @@
+<KnowledgeGraph>
+  <RomaGame_v2_1_Info>
+    <keywords>Telegram Bot, AI sprites, Phaser.js game, InstantID, birthday</keywords>
+    <terms>FSM, Redis, Replicate, K-Means, rembg, game template</terms>
+    <annotation>Платформа персонализированных игр: Telegram-бот собирает параметры (сценарий, персонажи, фото), берёт оплату, генерирует AI-спрайты через Replicate InstantID, публикует уникальную игру на GitHub Pages.</annotation>
+
+    <!-- ════════════════ AI LAYER (FS-3) ════════════════ -->
+
+    <backend_ai_color_extractor_py FILE="backend/ai/color_extractor.py" TYPE="DATA_PROCESSING_MODULE">
+      <keywords>K-Means, accent color, clustering, HSV, skin tone filter, fallback</keywords>
+      <terms>KMeans, colorsys, sklearn, PIL, hex color</terms>
+      <annotation>Извлечение акцентного цвета одежды: K-Means k=5 на нижней половине фото. Фильтрует кожный, белый, чёрный. Возвращает наиболее насыщенный hex. Fallback: #1a6fd4.</annotation>
+
+      <backend_ai_color_extractor_extract_accent_color_FUNC NAME="extract_accent_color" TYPE="IS_FUNC_OF_MODULE">
+        <annotation>Принимает image_bytes, возвращает hex #rrggbb акцентного цвета одежды.</annotation>
+      </backend_ai_color_extractor_extract_accent_color_FUNC>
+
+      <backend_ai_color_extractor__is_excluded_color_FUNC NAME="_is_excluded_color" TYPE="IS_FUNC_OF_MODULE">
+        <annotation>Вспомогательная: проверяет диапазоны кожного, белого, чёрного цвета.</annotation>
+      </backend_ai_color_extractor__is_excluded_color_FUNC>
+    </backend_ai_color_extractor_py>
+
+    <backend_ai_replicate_client_py FILE="backend/ai/replicate_client.py" TYPE="DATA_PROCESSING_MODULE">
+      <keywords>Replicate, InstantID, prompt, gender-specific, polling, PNG bytes, timeout</keywords>
+      <terms>PROMPTS dict, hero, companion_m, companion_f, accent_color, base64 data URI</terms>
+      <annotation>Клиент Replicate InstantID. Содержит 3 gender-specific промпта (hero, companion_m, companion_f). Подставляет accent_color. Возвращает PNG bytes. При timeout — TimeoutError, при сбое — RuntimeError.</annotation>
+
+      <backend_ai_replicate_client_generate_sprite_FUNC NAME="generate_sprite" TYPE="IS_FUNC_OF_MODULE">
+        <annotation>Принимает image_bytes, prompt_key, accent_color. Вызывает Replicate API, скачивает PNG результат.</annotation>
+      </backend_ai_replicate_client_generate_sprite_FUNC>
+    </backend_ai_replicate_client_py>
+
+    <backend_ai_postprocessor_py FILE="backend/ai/postprocessor.py" TYPE="DATA_PROCESSING_MODULE">
+      <keywords>rembg, background removal, resize, RGBA, 512px, Pillow, LANCZOS</keywords>
+      <terms>ONNX, U2Net, TARGET_HEIGHT=512, aspect ratio</terms>
+      <annotation>Постобработка спрайтов: rembg.remove → RGBA PNG, затем resize до h=512px с сохранением AR через Pillow LANCZOS. Возвращает PNG bytes с прозрачным фоном.</annotation>
+
+      <backend_ai_postprocessor_process_sprite_FUNC NAME="process_sprite" TYPE="IS_FUNC_OF_MODULE">
+        <annotation>Принимает PNG/JPEG bytes, возвращает RGBA PNG bytes h=512px.</annotation>
+      </backend_ai_postprocessor_process_sprite_FUNC>
+    </backend_ai_postprocessor_py>
+
+    <backend_ai_pipeline_py FILE="backend/ai/pipeline.py" TYPE="DATA_PROCESSING_MODULE">
+      <keywords>orchestrator, async, asyncio.to_thread, hero sprite, companion sprite, session_data</keywords>
+      <terms>run_pipeline, char_count, companion_gender, asyncio.to_thread</terms>
+      <annotation>Асинхронный оркестратор AI-пайплайна. Для героя и (опционально) компаньона: extract_accent_color → generate_sprite → process_sprite. Sync-шаги делегируются в thread pool. Возвращает dict {hero_sprite, companion_sprite}.</annotation>
+
+      <CrossLinks>
+        <Link TARGET="backend_ai_color_extractor_extract_accent_color_FUNC" TYPE="CALLS_METHOD" />
+        <Link TARGET="backend_ai_replicate_client_generate_sprite_FUNC" TYPE="CALLS_METHOD" />
+        <Link TARGET="backend_ai_postprocessor_process_sprite_FUNC" TYPE="CALLS_METHOD" />
+      </CrossLinks>
+
+      <backend_ai_pipeline_run_pipeline_FUNC NAME="run_pipeline" TYPE="IS_FUNC_OF_MODULE">
+        <annotation>async def run_pipeline(session_data: dict) → dict. Оркестрирует полный цикл генерации 1-2 персонажей.</annotation>
+      </backend_ai_pipeline_run_pipeline_FUNC>
+
+      <backend_ai_pipeline__generate_single_character_FUNC NAME="_generate_single_character" TYPE="IS_FUNC_OF_MODULE">
+        <annotation>Синхронный helper: color → generate → postprocess для одного персонажа.</annotation>
+      </backend_ai_pipeline__generate_single_character_FUNC>
+    </backend_ai_pipeline_py>
+
+    <!-- ════════════════ TESTS (FS-3) ════════════════ -->
+
+    <tests_test_color_extractor_py FILE="tests/test_color_extractor.py" TYPE="DATA_PROCESSING_MODULE">
+      <keywords>pytest, synthetic image, red bottom half, white fallback, skin tone fallback</keywords>
+      <annotation>5 тестов: красная нижняя половина → red hex; all-white → fallback; кожный тон → fallback; чёрный → fallback; формат #rrggbb lowercase.</annotation>
+    </tests_test_color_extractor_py>
+
+    <tests_test_replicate_py FILE="tests/test_replicate.py" TYPE="DATA_PROCESSING_MODULE">
+      <keywords>pytest, mock replicate, hero prompt, companion_m masculine, companion_f feminine, timeout, RuntimeError</keywords>
+      <annotation>6 тестов: hero содержит accent_color+UTV; companion_m — masculine silhouette; companion_f — feminine silhouette; timeout → TimeoutError; API error → RuntimeError; unknown key → ValueError.</annotation>
+    </tests_test_replicate_py>
+
+    <tests_test_postprocessor_py FILE="tests/test_postprocessor.py" TYPE="DATA_PROCESSING_MODULE">
+      <keywords>pytest, mock rembg, RGBA PNG, height 512, aspect ratio, valid PNG</keywords>
+      <annotation>5 тестов: RGBA mode после rembg; h=512; AR сохранён; PNG не повреждён; rembg.remove вызван с входными bytes. rembg мокируется через sys.modules patch (numba/llvmlite недоступны).</annotation>
+    </tests_test_postprocessor_py>
+
+    <!-- ════════════════ BACKEND LAYER (FS-4) ════════════════ -->
+
+    <backend_config_py FILE="backend/config.py" TYPE="DATA_PROCESSING_MODULE">
+      <keywords>Pydantic Settings, env, REDIS_URL, GITHUB_TOKEN, BOT_TOKEN, lru_cache</keywords>
+      <terms>Settings, get_settings, ConfigDict</terms>
+      <annotation>Pydantic BaseSettings: REDIS_URL, REPLICATE_API_TOKEN, GITHUB_TOKEN, GITHUB_REPO, GAME_BASE_URL, BOT_TOKEN. Синглтон через lru_cache. Читает .env при запуске.</annotation>
+      <backend_config_get_settings_FUNC NAME="get_settings" TYPE="IS_FUNC_OF_MODULE">
+        <annotation>Возвращает кешированный экземпляр Settings через lru_cache(maxsize=1).</annotation>
+      </backend_config_get_settings_FUNC>
+    </backend_config_py>
+
+    <backend_services_redis_client_py FILE="backend/services/redis_client.py" TYPE="DATA_PROCESSING_MODULE">
+      <keywords>async Redis, JSON session, TTL 72h, 259200, get/save/delete</keywords>
+      <terms>RedisClient, redis.asyncio, SESSION_TTL_SECONDS</terms>
+      <annotation>Async Redis wrapper. JSON-сериализация сессий. TTL фиксирован 259200 сек (72ч) для всех сессий в тест-версии. CRUD: get_session / save_session / delete_session.</annotation>
+      <backend_services_redis_client_RedisClient_CLASS NAME="RedisClient" TYPE="IS_CLASS_OF_MODULE">
+        <backend_services_redis_client_get_session_METHOD NAME="get_session" TYPE="IS_METHOD_OF_CLASS">
+          <annotation>async get_session(session_id) → dict | None. GET из Redis + JSON десериализация.</annotation>
+        </backend_services_redis_client_get_session_METHOD>
+        <backend_services_redis_client_save_session_METHOD NAME="save_session" TYPE="IS_METHOD_OF_CLASS">
+          <annotation>async save_session(session_id, data) → None. SET с TTL 259200.</annotation>
+        </backend_services_redis_client_save_session_METHOD>
+        <backend_services_redis_client_delete_session_METHOD NAME="delete_session" TYPE="IS_METHOD_OF_CLASS">
+          <annotation>async delete_session(session_id) → None. DEL из Redis.</annotation>
+        </backend_services_redis_client_delete_session_METHOD>
+      </backend_services_redis_client_RedisClient_CLASS>
+    </backend_services_redis_client_py>
+
+    <backend_services_game_builder_py FILE="backend/services/game_builder.py" TYPE="DATA_PROCESSING_MODULE">
+      <keywords>template.html, placeholder substitution, PLAYER_NAME, HAS_COMPANION, str.replace</keywords>
+      <terms>build, PLACEHOLDERS, TEMPLATE_PATH</terms>
+      <annotation>Читает game/template.html, заменяет 6 плейсхолдеров данными сессии. str.replace без Jinja2. HAS_COMPANION зависит от char_count. Возвращает str HTML.</annotation>
+      <CrossLinks>
+        <Link TARGET="game_template_html" TYPE="READS_DATA_FROM" />
+      </CrossLinks>
+      <backend_services_game_builder_build_FUNC NAME="build" TYPE="IS_FUNC_OF_MODULE">
+        <annotation>build(session_data: dict) → str. Подставляет 6 плейсхолдеров в template.html.</annotation>
+      </backend_services_game_builder_build_FUNC>
+    </backend_services_game_builder_py>
+
+    <backend_services_github_publisher_py FILE="backend/services/github_publisher.py" TYPE="DATA_PROCESSING_MODULE">
+      <keywords>GitHub Contents API, PUT, base64, gh-pages, sprite, HTML, sha, aiohttp</keywords>
+      <terms>GitHubPublisher, upload_sprite, upload_game, _put_file</terms>
+      <annotation>Async GitHub Pages publisher. PUT files через Contents API в ветку gh-pages. GET sha для обновления существующих файлов. upload_sprite → sprites/hero.png|companion.png; upload_game → index.html.</annotation>
+      <backend_services_github_publisher_GitHubPublisher_CLASS NAME="GitHubPublisher" TYPE="IS_CLASS_OF_MODULE">
+        <backend_services_github_publisher_upload_sprite_METHOD NAME="upload_sprite" TYPE="IS_METHOD_OF_CLASS">
+          <annotation>async upload_sprite(session_id, filename, image_bytes) → str (public URL).</annotation>
+        </backend_services_github_publisher_upload_sprite_METHOD>
+        <backend_services_github_publisher_upload_game_METHOD NAME="upload_game" TYPE="IS_METHOD_OF_CLASS">
+          <annotation>async upload_game(session_id, html) → str (public game URL).</annotation>
+        </backend_services_github_publisher_upload_game_METHOD>
+      </backend_services_github_publisher_GitHubPublisher_CLASS>
+    </backend_services_github_publisher_py>
+
+    <backend_api_sessions_py FILE="backend/api/sessions.py" TYPE="DATA_PROCESSING_MODULE">
+      <keywords>FastAPI router, POST/GET/PATCH sessions, UUID4, partial update, merge</keywords>
+      <terms>create_session, get_session, update_session, CreateSessionRequest</terms>
+      <annotation>Роутер /sessions: POST создаёт сессию (UUID4 + TTL 72ч), GET читает (404 если нет), PATCH обновляет только переданные поля (merge-семантика). Все операции через RedisClient.</annotation>
+      <CrossLinks>
+        <Link TARGET="backend_services_redis_client_RedisClient_CLASS" TYPE="CALLS_METHOD" />
+      </CrossLinks>
+    </backend_api_sessions_py>
+
+    <backend_api_games_py FILE="backend/api/games.py" TYPE="DATA_PROCESSING_MODULE">
+      <keywords>POST /games/build, AI pipeline, Telegram photo download, sprite upload, HTML publish</keywords>
+      <terms>build_game, _download_telegram_photo, asyncio.wait_for, timeout 120s</terms>
+      <annotation>Роутер /games/build: загружает сессию → скачивает фото с Telegram → запускает AI pipeline → загружает спрайты → собирает HTML → публикует на GitHub Pages → обновляет сессию → возвращает game_url. Timeout 120 сек, при ошибке HTTP 500.</annotation>
+      <CrossLinks>
+        <Link TARGET="backend_services_redis_client_RedisClient_CLASS" TYPE="CALLS_METHOD" />
+        <Link TARGET="backend_ai_pipeline_run_pipeline_FUNC" TYPE="CALLS_METHOD" />
+        <Link TARGET="backend_services_game_builder_build_FUNC" TYPE="CALLS_METHOD" />
+        <Link TARGET="backend_services_github_publisher_GitHubPublisher_CLASS" TYPE="CALLS_METHOD" />
+      </CrossLinks>
+    </backend_api_games_py>
+
+    <backend_main_py FILE="backend/main.py" TYPE="CLI_MODULE">
+      <keywords>FastAPI app, lifespan, CORS, uvicorn, app.state, Redis init, GitHubPublisher init</keywords>
+      <terms>create_app, lifespan, CORSMiddleware</terms>
+      <annotation>Точка входа FastAPI. lifespan: инициализирует RedisClient + GitHubPublisher в app.state. CORS allow_origins=*. Роутеры: /sessions, /games. Uvicorn 0.0.0.0:8000.</annotation>
+      <CrossLinks>
+        <Link TARGET="backend_api_sessions_py" TYPE="CALLS_METHOD" />
+        <Link TARGET="backend_api_games_py" TYPE="CALLS_METHOD" />
+        <Link TARGET="backend_services_redis_client_RedisClient_CLASS" TYPE="CREATES_INSTANCE_OF" />
+        <Link TARGET="backend_services_github_publisher_GitHubPublisher_CLASS" TYPE="CREATES_INSTANCE_OF" />
+      </CrossLinks>
+    </backend_main_py>
+
+    <!-- ════════════════ GAME LAYER (FS-5 ref) ════════════════ -->
+
+    <game_template_html FILE="game/template.html" TYPE="UI_MODULE">
+      <keywords>HTML template, 6 placeholders, window.GAME_CONFIG, Phaser.js bootstrap</keywords>
+      <terms>PLAYER_NAME, HERO_SPRITE_URL, COMPANION_SPRITE_URL, HAS_COMPANION, SCENARIO, HERO_GENDER</terms>
+      <annotation>Шаблон HTML игры. 6 плейсхолдеров {{...}} заменяются game_builder.build(). window.GAME_CONFIG инжектируется для Phaser.js сцен.</annotation>
+    </game_template_html>
+
+    <!-- ════════════════ TESTS (FS-4) ════════════════ -->
+
+    <tests_test_session_py FILE="tests/test_session.py" TYPE="DATA_PROCESSING_MODULE">
+      <keywords>pytest, fakeredis, AsyncClient, POST/GET/PATCH sessions, UUID4, TTL 259200</keywords>
+      <annotation>6 тестов: POST→UUID4; GET→200 data; GET nonexistent→404; PATCH→partial update; Redis TTL≈259200; PATCH nonexistent→404. fakeredis.aioredis вместо реального Redis.</annotation>
+    </tests_test_session_py>
+
+    <tests_test_game_builder_py FILE="tests/test_game_builder.py" TYPE="DATA_PROCESSING_MODULE">
+      <keywords>pytest, game_builder, 6 placeholders, HAS_COMPANION, char_count, PLAYER_NAME, SCENARIO</keywords>
+      <annotation>8 тестов: все 6 плейсхолдеров заменены; HAS_COMPANION=true при char_count=2; HAS_COMPANION=false при char_count=1; имя подставлено; scenario корректен; gender корректен; sprite URLs подставлены; build возвращает str.</annotation>
+    </tests_test_game_builder_py>
+
+    <!-- ════════════════ MODULE INTERACTIONS ════════════════ -->
+
+    <ProjectCrossLinks TYPE="MODULE_INTERACTIONS_OVERVIEW">
+      <Link SOURCE="backend_ai_pipeline_py" TARGET="backend_ai_color_extractor_py" TYPE="CALLS_METHOD" />
+      <Link SOURCE="backend_ai_pipeline_py" TARGET="backend_ai_replicate_client_py" TYPE="CALLS_METHOD" />
+      <Link SOURCE="backend_ai_pipeline_py" TARGET="backend_ai_postprocessor_py" TYPE="CALLS_METHOD" />
+      <Link SOURCE="backend_main_py" TARGET="backend_api_sessions_py" TYPE="CALLS_METHOD" />
+      <Link SOURCE="backend_main_py" TARGET="backend_api_games_py" TYPE="CALLS_METHOD" />
+      <Link SOURCE="backend_api_sessions_py" TARGET="backend_services_redis_client_py" TYPE="CALLS_METHOD" />
+      <Link SOURCE="backend_api_games_py" TARGET="backend_services_redis_client_py" TYPE="CALLS_METHOD" />
+      <Link SOURCE="backend_api_games_py" TARGET="backend_ai_pipeline_py" TYPE="CALLS_METHOD" />
+      <Link SOURCE="backend_api_games_py" TARGET="backend_services_game_builder_py" TYPE="CALLS_METHOD" />
+      <Link SOURCE="backend_api_games_py" TARGET="backend_services_github_publisher_py" TYPE="CALLS_METHOD" />
+      <Link SOURCE="backend_services_game_builder_py" TARGET="game_template_html" TYPE="READS_DATA_FROM" />
+    </ProjectCrossLinks>
+
+  </RomaGame_v2_1_Info>
+</KnowledgeGraph>

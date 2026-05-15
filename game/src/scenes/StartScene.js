@@ -1,18 +1,21 @@
-// FILE: src/scenes/StartScene.js
-// VERSION: 1.2.0
+// FILE: game/src/scenes/StartScene.js
+// VERSION: 2.0.0
 // START_MODULE_CONTRACT:
-// PURPOSE: Стартовый экран игры. Роман стоит на площадке, праздничный фон.
-//          По нажатию СТАРТ: багги въезжает справа, Роман «садится», переход в GameScene.
+// PURPOSE: Стартовый экран игры. Герой стоит на площадке, праздничный фон.
+//          В v2.0: приветственный текст читается из GAME_TEXTS с гендерной адаптацией.
+//          Имя берётся из GameConstants.PLAYER_NAME (источник — window.GAME_CONFIG).
+//          По нажатию СТАРТ: багги въезжает справа, герой «садится», переход в GameScene.
 // SCOPE: Отображение UI, анимация въезда багги, переход в GameScene.
-// INPUT: Нет данных из предыдущей сцены.
+// INPUT: GameConstants.PLAYER_NAME, GameConstants.HERO_GENDER; window.GAME_TEXTS.
 // OUTPUT: Запуск GameScene.
 // KEYWORDS: DOMAIN(8): StartScreen; CONCEPT(7): IntroAnimation; TECH(9): PhaserTween
 // LINKS: USES_API(9): Phaser.Scene; SENDS_EVENT_TO(8): GameScene
 // END_MODULE_CONTRACT
 //
 // START_CHANGE_SUMMARY:
-// LAST_CHANGE: [v1.2.0 - Возврат к GitHub-версии. Текст на тёмной подложке, кнопка с чистой пульсацией (только масштаб).]
-// PREV_CHANGE_SUMMARY: [v1.1.0 - Фигурка Романа +50%, машинка въезжает пустой, Роман появляется в ней на ходу.]
+// LAST_CHANGE: [v2.0.0 - FS-5: Динамический заголовок с именем из GAME_CONFIG.
+//              Приветствие через formatText(GAME_TEXTS.start[HERO_GENDER], PLAYER_NAME).]
+// PREV_CHANGE_SUMMARY: [v1.2.0 - Возврат к GitHub-версии. Текст на тёмной подложке.]
 // END_CHANGE_SUMMARY
 //
 // START_MODULE_MAP:
@@ -23,12 +26,13 @@
 class StartScene extends Phaser.Scene {
 
   /**
-   * Стартовый экран: праздничный фон, Роман стоит, приветственный текст, кнопка СТАРТ.
+   * Стартовый экран: праздничный фон, герой стоит, приветственный текст, кнопка СТАРТ.
    * После нажатия СТАРТ: анимация въезда багги + переход в GameScene.
+   * Все тексты с именем формируются через window.formatText() и window.GAME_TEXTS.
    */
   constructor() {
     super({ key: GameConstants.SCENES.START });
-    console.log('[Flow][IMP:5][StartScene][constructor][Init] StartScene инстанцирована. [OK]');
+    console.log('[Flow][IMP:5][StartScene][constructor][Init] StartScene v2 инстанцирована. [OK]');
   }
 
   // START_FUNCTION_create
@@ -42,6 +46,11 @@ class StartScene extends Phaser.Scene {
     var cy   = C.GAME_HEIGHT / 2;
     this._started = false;
 
+    // START_BLOCK_CONFIG_READ: Читаем параметры персонализации
+    var playerName = C.PLAYER_NAME;
+    var heroGender = C.HERO_GENDER;
+    // END_BLOCK_CONFIG_READ
+
     // START_BLOCK_BACKGROUND: Праздничный стартовый фон
     var bgKey = this.textures.exists(C.ASSETS.BG_START) ? C.ASSETS.BG_START : null;
     if (bgKey) {
@@ -52,25 +61,30 @@ class StartScene extends Phaser.Scene {
     }
     // END_BLOCK_BACKGROUND
 
-    // START_BLOCK_ROMAN_STANDING: Роман стоит в центре (чуть левее), размер +50%
+    // START_BLOCK_HERO_STANDING: Герой стоит в центре (чуть левее), размер +50%
     var romanX = cx - 80;
     var romanY = C.GAME_HEIGHT - 60;
     this._romanSprite = this.add.image(romanX, romanY, C.ASSETS.ROMAN_STANDING)
       .setDisplaySize(138, 186)
       .setOrigin(0.5, 1)
       .setDepth(5);
-    // END_BLOCK_ROMAN_STANDING
+    // END_BLOCK_HERO_STANDING
 
     // START_BLOCK_START_BUTTON: Кнопка СТАРТ (верхняя часть экрана)
     this._createStartButton(cx, C);
+    // END_BLOCK_START_BUTTON
 
-    // START_BLOCK_TITLE: Приветственный заголовок + информационная панель
-    // Панель увеличена по высоте, шрифты подняты, добавлена строка управления
-    // BUG_FIX_CONTEXT: Имя было захардкожено. Теперь читается из GAME_CONFIG.PLAYER_NAME,
-    // который инжектируется в deployed HTML через game/template.html.
-    var playerName = (window.GAME_CONFIG && window.GAME_CONFIG.PLAYER_NAME)
-        ? window.GAME_CONFIG.PLAYER_NAME : 'Роман Анатольевич';
-    this.add.text(cx, 90, 'Привет, ' + playerName + '! 🎂', {
+    // START_BLOCK_TITLE: Динамический приветственный заголовок + информационная панель
+    // Приветствие адаптировано по полу через GAME_TEXTS.start[heroGender]
+    var greetTemplate = (window.GAME_TEXTS && window.GAME_TEXTS.start && window.GAME_TEXTS.start[heroGender])
+      ? window.GAME_TEXTS.start[heroGender]
+      : '{name}, приветствуем тебя! 🎉';
+
+    var greetText = (window.formatText)
+      ? window.formatText(greetTemplate, playerName)
+      : playerName + ', приветствуем тебя! 🎉';
+
+    this.add.text(cx, 90, greetText, {
       fontFamily:      'Arial Black',
       fontSize:        '28px',
       color:           '#f0c040',
@@ -79,7 +93,7 @@ class StartScene extends Phaser.Scene {
       align:           'center'
     }).setOrigin(0.5).setDepth(10);
 
-    this.add.text(cx, 138, '🪙 Монета +10      🍓 Клубника +25      ❤️ Сердце +50', {
+    this.add.text(cx, 138, '🪙 Монета +10      🍓 Клубника +10      ❤️ Сердце +10', {
       fontFamily:      'Arial',
       fontSize:        '20px',
       color:           '#ffffff',
@@ -103,13 +117,13 @@ class StartScene extends Phaser.Scene {
       strokeThickness: 3
     }).setOrigin(0.5).setDepth(10);
     // END_BLOCK_TITLE
-    // END_BLOCK_START_BUTTON
 
     // START_BLOCK_DECORATIONS: Конфетти-декорации
     this._spawnConfetti(C);
     // END_BLOCK_DECORATIONS
 
-    console.log('[BeliefState][IMP:9][StartScene][create] StartScene создана. [OK]');
+    console.log('[BeliefState][IMP:9][StartScene][create] StartScene v2 создана. playerName=' +
+      playerName + ' heroGender=' + heroGender + ' [OK]');
   }
   // END_FUNCTION_create
 
@@ -129,7 +143,7 @@ class StartScene extends Phaser.Scene {
       strokeThickness: 4
     }).setOrigin(0.5).setDepth(11);
 
-    // START_BLOCK_PULSE: Чистая пульсация масштаба — без мигания и смены цвета
+    // START_BLOCK_PULSE: Чистая пульсация масштаба
     this.tweens.add({
       targets:  [btnBg, btnText],
       scaleX:   1.08,
@@ -145,7 +159,6 @@ class StartScene extends Phaser.Scene {
     btnBg.on('pointerout',  function () { btnBg.setFillStyle(0xe53935); });
     btnBg.on('pointerdown', this._onStart, this);
 
-    // Space тоже запускает
     this.input.keyboard.once('keydown-SPACE', this._onStart, this);
   }
   // END_FUNCTION__createStartButton
@@ -154,7 +167,6 @@ class StartScene extends Phaser.Scene {
   _onStart() {
     if (this._started) { return; }
     this._started = true;
-    // Музыка стартует здесь — первый жест пользователя разблокирует AudioContext
     if (window.MusicSystem) { window.MusicSystem.start(); }
     console.log('[BeliefState][IMP:9][StartScene][_onStart] СТАРТ нажат. Анимация въезда багги. [OK]');
     this._animateBuggyEntry();
@@ -164,24 +176,23 @@ class StartScene extends Phaser.Scene {
   // START_FUNCTION__animateBuggyEntry
   _animateBuggyEntry() {
     /**
-     * 1. Багги въезжает справа — пустая (Романа внутри нет).
-     * 2. На середине пути (600мс) Роман плавно «появляется» внутри машины.
-     * 3. Стоячий Роман исчезает когда багги добирается до него.
+     * 1. Багги въезжает справа — пустая.
+     * 2. На середине пути (600мс) герой плавно «появляется» внутри машины.
+     * 3. Стоячий герой исчезает когда багги добирается до него.
      * 4. Переход в GameScene.
      */
     var C      = GameConstants;
     var romanX = C.GAME_WIDTH / 2 - 80;
     var buggyY = C.GAME_HEIGHT - 60;
 
-    // START_BLOCK_BUGGY_SPRITE: Багги въезжает справа — пустая
+    // START_BLOCK_BUGGY_SPRITE: Багги въезжает справа
     this._buggy = this.add.image(C.GAME_WIDTH + 140, buggyY, C.ASSETS.PLAYER)
       .setDisplaySize(120, 76)
       .setOrigin(0.5, 1)
       .setDepth(6);
     // END_BLOCK_BUGGY_SPRITE
 
-    // START_BLOCK_ROMAN_IN_CAR: Роман внутри машины — изначально невидим, следует за багги
-    // Смещение: чуть левее центра багги, в верхней части кузова
+    // START_BLOCK_HERO_IN_CAR: Герой внутри машины — изначально невидим
     var driverOffX = -10;
     var driverOffY = -52;
     var self = this;
@@ -194,9 +205,9 @@ class StartScene extends Phaser.Scene {
       .setOrigin(0.5, 1)
       .setAlpha(0)
       .setDepth(7);
-    // END_BLOCK_ROMAN_IN_CAR
+    // END_BLOCK_HERO_IN_CAR
 
-    // START_BLOCK_BUGGY_TWEEN: Tween: едет влево к Роману; onUpdate синхронизирует позицию Романа в машине
+    // START_BLOCK_BUGGY_TWEEN: Tween: едет влево к герою
     this.tweens.add({
       targets:  this._buggy,
       x:        romanX + 20,
@@ -213,7 +224,7 @@ class StartScene extends Phaser.Scene {
     });
     // END_BLOCK_BUGGY_TWEEN
 
-    // START_BLOCK_ROMAN_APPEAR: Роман появляется в машине на середине пути (~600мс)
+    // START_BLOCK_HERO_APPEAR: Герой появляется в машине на середине пути (~600мс)
     this.time.delayedCall(600, function () {
       self.tweens.add({
         targets:  self._romanInCar,
@@ -222,17 +233,13 @@ class StartScene extends Phaser.Scene {
         ease:     'Quad.Out'
       });
     });
-    // END_BLOCK_ROMAN_APPEAR
+    // END_BLOCK_HERO_APPEAR
   }
   // END_FUNCTION__animateBuggyEntry
 
   // START_FUNCTION__onBuggyArrived
   _onBuggyArrived() {
-    /**
-     * Роман садится (анимация уменьшения в 0), затем переходим в GameScene.
-     */
-
-    // START_BLOCK_ROMAN_SIT: Роман исчезает (садится в машину)
+    // START_BLOCK_HERO_SIT: Герой исчезает (садится в машину)
     this.tweens.add({
       targets:  this._romanSprite,
       scaleY:   0,
@@ -240,7 +247,7 @@ class StartScene extends Phaser.Scene {
       duration: 250,
       ease:     'Quad.In'
     });
-    // END_BLOCK_ROMAN_SIT
+    // END_BLOCK_HERO_SIT
 
     // START_BLOCK_TRANSITION: Короткая пауза — переход в GameScene
     this.time.delayedCall(600, function () {
@@ -254,10 +261,6 @@ class StartScene extends Phaser.Scene {
 
   // START_FUNCTION__spawnConfetti
   _spawnConfetti(C) {
-    /**
-     * Несколько мигающих «конфетти» поверх фона для праздничности.
-     * Используем простые цветные круги с tween.
-     */
     var colors = [0xf0c040, 0xe53935, 0x7b1fa2, 0x43a047, 0x1565c0];
     for (var i = 0; i < 18; i++) {
       var x = Phaser.Math.Between(20, C.GAME_WIDTH  - 20);
@@ -282,15 +285,10 @@ class StartScene extends Phaser.Scene {
 
   // START_FUNCTION__drawFestiveBg
   _drawFestiveBg(C) {
-    /**
-     * Fallback-фон, если BG_START не загрузился.
-     * Градиентные полосы + звёздочки.
-     */
     var gfx = this.add.graphics().setDepth(0);
     gfx.fillStyle(0x0d1b2a, 1);
     gfx.fillRect(0, 0, C.GAME_WIDTH, C.GAME_HEIGHT);
 
-    // Декоративные горизонтальные полосы
     var stripeColors = [0x1a237e, 0x4a148c, 0x1b5e20, 0xb71c1c];
     for (var i = 0; i < 6; i++) {
       gfx.fillStyle(stripeColors[i % stripeColors.length], 0.12);

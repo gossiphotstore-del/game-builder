@@ -1,33 +1,32 @@
-// FILE: src/scenes/BootScene.js
-// VERSION: 1.1.0
+// FILE: game/src/scenes/BootScene.js
+// VERSION: 2.0.0
 // START_MODULE_CONTRACT:
 // PURPOSE: Preloader-сцена. Загружает финальные ассеты из assets/images/final/.
-//          Для отсутствующих файлов (player, girl) генерирует программные текстуры.
+//          В v2.0: загружает спрайты героя и компаньона из GAME_CONFIG URLs.
+//          Для отсутствующих файлов генерирует программные текстуры.
 //          Текстура ground всегда генерируется программно (нет файла).
 //          По завершении переходит в StartScene.
 // SCOPE: Загрузка ассетов, генерация плейсхолдеров, отображение прогресса, переход на StartScene.
-// INPUT: PNG-файлы из assets/images/final/; GameConstants.ASSETS — ключи текстур.
+// INPUT: GAME_CONFIG URLs для спрайтов; GameConstants.ASSETS — ключи текстур.
 // OUTPUT: Все текстуры в кэше Phaser → StartScene готова к работе.
 // KEYWORDS: DOMAIN(9): Preloader; CONCEPT(8): AssetPipeline; TECH(9): PhaserScene
-// LINKS: USES_API(9): Phaser.Scene; READS_DATA_FROM(8): assets/images/final/
+// LINKS: READS_DATA_FROM(8): window.GAME_CONFIG; READS_DATA_FROM(8): assets/images/final/
 // END_MODULE_CONTRACT
 //
 // START_RATIONALE:
-// Q: Почему часть текстур генерируется через this.make.graphics().generateTexture()?
-// A: Финальные PNG для player и girl создаются внешним скриптом (generate_sprites.py).
-//    До их генерации нужны функциональные плейсхолдеры. generateTexture() позволяет
-//    создать текстуру прямо в Phaser без внешних файлов. ground всегда генерируется
-//    так — одиночный тайл 32×32, который TileSprite растягивает по всему уровню.
+// Q: Почему спрайты загружаются по URL из GAME_CONFIG?
+// A: game_builder.py подставляет URL AI-сгенерированных спрайтов с GitHub Pages.
+//    При локальной разработке GAME_CONFIG содержит дефолтные пути к локальным PNG.
+//    Паттерн остаётся одинаковым: BootScene всегда читает URL из GAME_CONFIG.
+// Q: Компаньон загружается только при HAS_COMPANION=true?
+// A: Экономия трафика. При одиночном сценарии спрайт компаньона не нужен.
 // END_RATIONALE
 //
-// START_INVARIANTS:
-// - preload() ВСЕГДА вызывается перед create() движком Phaser.
-// - После create() все необходимые текстуры гарантированно существуют в кэше.
-// END_INVARIANTS
-//
 // START_CHANGE_SUMMARY:
-// LAST_CHANGE: [v1.1.0 - Переключение на assets/images/final/; генерация плейсхолдеров.]
-// PREV_CHANGE_SUMMARY: [v1.0.0 - Slice 1 Bootstrap.]
+// LAST_CHANGE: [v2.0.0 - FS-5: Загрузка спрайтов через GAME_CONFIG URLs.
+//              Текст загрузки динамический (имя из GAME_CONFIG).
+//              Компаньон загружается только при HAS_COMPANION=true.]
+// PREV_CHANGE_SUMMARY: [v1.1.0 - Переключение на assets/images/final/; генерация плейсхолдеров.]
 // END_CHANGE_SUMMARY
 //
 // START_MODULE_MAP:
@@ -36,13 +35,13 @@
 
 // START_FUNCTION_BootScene
 // START_CONTRACT:
-// PURPOSE: Phaser.Scene subclass. preload() загружает PNG из final/. create() генерирует
-//          программные текстуры для отсутствующих ассетов, затем переходит в StartScene.
-// INPUTS: Нет внешних входов.
+// PURPOSE: Phaser.Scene subclass. preload() загружает PNG из final/ и по GAME_CONFIG URLs.
+//          create() генерирует программные текстуры для отсутствующих ассетов.
+// INPUTS: window.GAME_CONFIG.HERO_SPRITE_URL, COMPANION_SPRITE_URL, HAS_COMPANION, PLAYER_NAME.
 // OUTPUTS: Все текстуры в кэше Phaser; переход на StartScene.
 // SIDE_EFFECTS: Рисует прогресс-бар; создаёт текстуры через generateTexture().
 // KEYWORDS: PATTERN(8): Preloader; CONCEPT(9): AssetCache; TECH(9): Phaser3Scene
-// COMPLEXITY_SCORE: 7 [Graphics API + обработчики прогресса + генерация текстур]
+// COMPLEXITY_SCORE: 7
 // END_CONTRACT
 class BootScene extends Phaser.Scene {
 
@@ -56,21 +55,21 @@ class BootScene extends Phaser.Scene {
     this._progressBg   = null;
     this._progressText = null;
     this._loadingLabel = null;
-    console.log('[Flow][IMP:5][BootScene][constructor][Init] BootScene инстанцирована. [OK]');
+    console.log('[Flow][IMP:5][BootScene][constructor][Init] BootScene v2 инстанцирована. [OK]');
   }
 
   // START_FUNCTION_preload
   // START_CONTRACT:
-  // PURPOSE: Загружает все доступные PNG из assets/images/final/ по правильным ключам.
-  //          Для player и girl — пытается загрузить; если файлы отсутствуют, в create()
-  //          будут сгенерированы плейсхолдеры.
+  // PURPOSE: Загружает все доступные PNG. Спрайты героя/компаньона — из GAME_CONFIG URLs.
+  //          Компаньон загружается только если HAS_COMPANION=true.
   // COMPLEXITY_SCORE: 5
   // END_CONTRACT
   preload() {
     /**
-     * Phaser вызывает preload() автоматически. Здесь создаём прогресс-бар
-     * через Graphics API (не требует загруженных текстур) и регистрируем
-     * все PNG-файлы из assets/images/final/ под их игровыми ключами.
+     * Phaser вызывает preload() автоматически. Прогресс-бар создаётся через
+     * Graphics API (не требует загруженных текстур). Спрайты персонажей
+     * загружаются по URL из GAME_CONFIG — поддерживает как локальные файлы,
+     * так и удалённые URLs с GitHub Pages.
      */
 
     // START_BLOCK_SETUP_PROGRESS_BAR: Создание визуального прогресс-бара
@@ -78,15 +77,23 @@ class BootScene extends Phaser.Scene {
     var cx = C.GAME_WIDTH  / 2;
     var cy = C.GAME_HEIGHT / 2;
 
+    // Получаем имя игрока для отображения в процессе загрузки
+    var playerName = (window.GAME_CONFIG && window.GAME_CONFIG.PLAYER_NAME)
+      ? window.GAME_CONFIG.PLAYER_NAME
+      : '...';
+
     this.cameras.main.setBackgroundColor('#1a1a2e');
 
-    this._loadingLabel = this.add.text(cx, cy - 80, '🎉 Загрузка игры... 🎉', {
-      fontFamily: 'Arial',
-      fontSize:   '26px',
-      color:      '#f0c040',
-      stroke:     '#1a1a2e',
-      strokeThickness: 4
-    }).setOrigin(0.5);
+    this._loadingLabel = this.add.text(cx, cy - 80,
+      '🎉 Загружаем игру для ' + playerName + '... 🎉', {
+        fontFamily: 'Arial',
+        fontSize:   '22px',
+        color:      '#f0c040',
+        stroke:     '#1a1a2e',
+        strokeThickness: 4,
+        wordWrap: { width: 600 },
+        align: 'center'
+      }).setOrigin(0.5);
 
     this._progressText = this.add.text(cx, cy + 60, '0%', {
       fontFamily: 'Arial',
@@ -102,17 +109,13 @@ class BootScene extends Phaser.Scene {
 
     this.load.on('progress', this._onProgress, this);
     this.load.on('complete', this._onComplete, this);
-    console.log('[Flow][IMP:5][BootScene][preload][SETUP_PROGRESS_BAR] Прогресс-бар создан. [OK]');
+    console.log('[Flow][IMP:5][BootScene][preload][SETUP_PROGRESS_BAR] Прогресс-бар создан. playerName=' + playerName + ' [OK]');
     // END_BLOCK_SETUP_PROGRESS_BAR
 
-    // START_BLOCK_LOAD_ASSETS: Регистрация PNG-ассетов из assets/images/final/
-    // BUG_FIX_CONTEXT: В deployed игре (games/{id}/index.html) относительный путь 'assets/...'
-    // разрешается как games/{id}/assets/... — файлов там нет. GAME_CONFIG.ASSETS_BASE='../../'
-    // указывает путь к корню gh-pages. Локально GAME_CONFIG отсутствует → prefix=''.
-    var assetsBase = (window.GAME_CONFIG && window.GAME_CONFIG.ASSETS_BASE !== undefined)
-        ? window.GAME_CONFIG.ASSETS_BASE
-        : '';
-    var base = assetsBase + 'assets/images/final/';
+    // START_BLOCK_LOAD_STATIC_ASSETS: Регистрация статических PNG-ассетов
+    // BUG_FIX_CONTEXT: ../../assets/ т.к. HTML деплоится в games/{id}/index.html,
+    // а статика лежит в корне gh-pages. Два уровня вверх — к корню репозитория.
+    var base = '../../assets/images/final/';
 
     // Фоны
     this.load.image(C.ASSETS.BG,       base + 'background_game.png');
@@ -131,25 +134,29 @@ class BootScene extends Phaser.Scene {
     // Финал
     this.load.image(C.ASSETS.FLAG, base + 'finish_flag.png');
 
-    // Персонажи (могут отсутствовать — генерируются в create() как плейсхолдеры)
-    this.load.image(C.ASSETS.PLAYER, base + 'roman_buggy.png');
-    this.load.image(C.ASSETS.GIRL,   base + 'girl_waving.png');
+    // Стоячий герой (из статических ассетов — используется в StartScene)
+    this.load.image(C.ASSETS.ROMAN_STANDING, base + 'roman_standing.png');
 
-    // BUG_FIX_CONTEXT: Герой загружается из URL AI-генерации если GAME_CONFIG.HERO_SPRITE_URL
-    // установлен (deployed версия). Локально — статический roman_standing.png.
-    var heroSpriteUrl = (window.GAME_CONFIG && window.GAME_CONFIG.HERO_SPRITE_URL)
-        ? window.GAME_CONFIG.HERO_SPRITE_URL
-        : null;
-    if (heroSpriteUrl) {
-        this.load.crossOrigin = 'anonymous';
-        this.load.image(C.ASSETS.ROMAN_STANDING, heroSpriteUrl);
-        console.log('[I/O][IMP:7][BootScene][preload][LOAD_ASSETS] hero_sprite: загрузка из GAME_CONFIG URL. [OK]');
+    console.log('[I/O][IMP:7][BootScene][preload][LOAD_STATIC_ASSETS] 10 статических ассетов в очереди. [OK]');
+    // END_BLOCK_LOAD_STATIC_ASSETS
+
+    // START_BLOCK_LOAD_DYNAMIC_SPRITES: Загрузка персонажей из GAME_CONFIG URLs
+    var heroUrl      = C.HERO_SPRITE_URL;
+    var companionUrl = C.COMPANION_SPRITE_URL;
+    var hasCompanion = C.HAS_COMPANION;
+
+    // Герой (багги) — всегда загружается
+    this.load.image(C.ASSETS.PLAYER, heroUrl);
+    console.log('[I/O][IMP:7][BootScene][preload][LOAD_DYNAMIC_SPRITES] PLAYER URL=' + heroUrl + ' [OK]');
+
+    // Компаньон — только если HAS_COMPANION=true
+    if (hasCompanion) {
+      this.load.image(C.ASSETS.GIRL, companionUrl);
+      console.log('[I/O][IMP:7][BootScene][preload][LOAD_DYNAMIC_SPRITES] GIRL URL=' + companionUrl + ' [OK]');
     } else {
-        this.load.image(C.ASSETS.ROMAN_STANDING, base + 'roman_standing.png');
+      console.log('[Flow][IMP:5][BootScene][preload][LOAD_DYNAMIC_SPRITES] HAS_COMPANION=false, компаньон не загружается. [INFO]');
     }
-
-    console.log('[I/O][IMP:7][BootScene][preload][LOAD_ASSETS] ассеты добавлены в очередь. assetsBase=' + assetsBase + ' [OK]');
-    // END_BLOCK_LOAD_ASSETS
+    // END_BLOCK_LOAD_DYNAMIC_SPRITES
   }
   // END_FUNCTION_preload
 
@@ -162,7 +169,7 @@ class BootScene extends Phaser.Scene {
   create() {
     /**
      * Phaser вызывает create() после завершения preload().
-     * Сначала генерируем все необходимые программные текстуры (ground обязательно,
+     * Генерируем все необходимые программные текстуры (ground обязательно,
      * player/girl — по необходимости). Затем отложенный переход в StartScene.
      */
 
@@ -206,7 +213,7 @@ class BootScene extends Phaser.Scene {
     });
     // END_BLOCK_GROUND_TEXTURE
 
-    // START_BLOCK_PLAYER_TEXTURE: Плейсхолдер игрока (багги + Роман) 96×58
+    // START_BLOCK_PLAYER_TEXTURE: Плейсхолдер игрока (багги) 96×58 — если URL не загрузился
     if (!this.textures.exists(C.ASSETS.PLAYER)) {
       this._makeTexture(C.ASSETS.PLAYER, 96, 58, function (g) {
         // Корпус багги
@@ -233,7 +240,7 @@ class BootScene extends Phaser.Scene {
     }
     // END_BLOCK_PLAYER_TEXTURE
 
-    // START_BLOCK_ROMAN_STANDING_TEXTURE: Плейсхолдер Романа стоящего 60×100
+    // START_BLOCK_ROMAN_STANDING_TEXTURE: Плейсхолдер героя стоящего 60×100
     if (!this.textures.exists(C.ASSETS.ROMAN_STANDING)) {
       this._makeTexture(C.ASSETS.ROMAN_STANDING, 60, 100, function (g) {
         // Голова
@@ -259,8 +266,8 @@ class BootScene extends Phaser.Scene {
     }
     // END_BLOCK_ROMAN_STANDING_TEXTURE
 
-    // START_BLOCK_GIRL_TEXTURE: Плейсхолдер девушки 48×80
-    if (!this.textures.exists(C.ASSETS.GIRL)) {
+    // START_BLOCK_GIRL_TEXTURE: Плейсхолдер компаньона 48×80 — только если HAS_COMPANION=true и URL не загрузился
+    if (C.HAS_COMPANION && !this.textures.exists(C.ASSETS.GIRL)) {
       this._makeTexture(C.ASSETS.GIRL, 48, 80, function (g) {
         // Голова
         g.fillStyle(0xffd9b3, 1);
@@ -288,16 +295,6 @@ class BootScene extends Phaser.Scene {
   // END_FUNCTION__generateMissingTextures
 
   // START_FUNCTION__makeTexture
-  // START_CONTRACT:
-  // PURPOSE: Вспомогательный метод — создаёт временный Graphics-объект, вызывает
-  //          drawFn для отрисовки, генерирует текстуру, уничтожает Graphics.
-  // INPUTS:
-  // - ключ текстуры => key: String
-  // - ширина => w: Number
-  // - высота => h: Number
-  // - функция отрисовки => drawFn: Function(Graphics)
-  // COMPLEXITY_SCORE: 2
-  // END_CONTRACT
   _makeTexture(key, w, h, drawFn) {
     var gfx = this.make.graphics({ x: 0, y: 0, add: false });
     drawFn(gfx);
