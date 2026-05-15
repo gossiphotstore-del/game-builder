@@ -36,9 +36,8 @@
 
     /* BUG_FIX_CONTEXT: display:flex на контейнере конфликтовал с Phaser Scale.ENVELOP —
        Phaser центрирует canvas через отрицательные margin (marginLeft/marginTop),
-       но отрицательные margins flex-item не дают нужного смещения. Также display:none
-       в portrait-режиме мешало Phaser измерять размеры контейнера.
-       Решение: position:fixed + overflow:hidden, без flex. Portrait-overlay поверх (z-index). */
+       но отрицательные margins flex-item не дают нужного смещения.
+       Решение: position:fixed + overflow:hidden, без flex. */
     #game-container {
       position: fixed;
       top: 0;
@@ -56,54 +55,10 @@
     }
     /* END_BLOCK_RESET */
 
-    /* START_BLOCK_PORTRAIT_OVERLAY: Подсказка поворота при вертикальной ориентации */
-    /* Portrait-overlay лежит поверх game-container через z-index.
-       game-container НЕ скрывается — Phaser должен видеть контейнер для корректного resize. */
-    #portrait-overlay {
-      display: none;
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: #1a1a2e;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      text-align: center;
-      color: #f0c040;
-      z-index: 9999;
-      padding: 32px;
-      gap: 12px;
-    }
-
-    .portrait-icon {
-      font-size: 72px;
-      animation: rotate-hint 2.5s ease-in-out infinite;
-    }
-
-    .portrait-title {
-      font-size: 22px;
-      font-weight: bold;
-    }
-
-    .portrait-hint {
-      font-size: 14px;
-      color: #aaa;
-      max-width: 260px;
-    }
-
-    @keyframes rotate-hint {
-      0%, 30%  { transform: rotate(0deg); }
-      60%, 90% { transform: rotate(-90deg); }
-      100%     { transform: rotate(0deg); }
-    }
-
-    @media (orientation: portrait) {
-      #portrait-overlay { display: flex; }
-      /* game-container остаётся видимым — overlay перекрывает его через z-index */
-    }
-    /* END_BLOCK_PORTRAIT_OVERLAY */
+    /* START_BLOCK_PORTRAIT_SUPPORT: Поддержка вертикальной ориентации */
+    /* Scale.ENVELOP масштабирует canvas чтобы покрыть весь экран в любой ориентации.
+       Камера в GameScene следует за игроком — контент всегда в центре видимой области. */
+    /* END_BLOCK_PORTRAIT_SUPPORT */
 
     /* START_BLOCK_LOADING: Индикатор загрузки до инициализации Phaser */
     #loading-screen {
@@ -145,12 +100,6 @@
 <body>
 
   <!-- START_BLOCK_DOM: Корневые DOM-элементы -->
-  <div id="portrait-overlay">
-    <div class="portrait-icon">⟳</div>
-    <div class="portrait-title">Переверните телефон</div>
-    <div class="portrait-hint">Игра работает в горизонтальной ориентации</div>
-  </div>
-
   <div id="loading-screen">
     <div class="loading-title">Загрузка игры...</div>
   </div>
@@ -203,9 +152,6 @@
   <script>
     // START_BLOCK_LOADING_HIDE: Скрыть загрузочный экран после инициализации Phaser
     window.addEventListener('load', function () {
-      if (screen.orientation && screen.orientation.lock) {
-        screen.orientation.lock('landscape').catch(function () {});
-      }
       setTimeout(function () {
         var loadingScreen = document.getElementById('loading-screen');
         if (loadingScreen) {
