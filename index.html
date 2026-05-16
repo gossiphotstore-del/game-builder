@@ -47,12 +47,23 @@
       overflow: hidden;
     }
 
+    /* START_BLOCK_CANVAS_FULLSCREEN: CSS ENVELOP через !important — переопределяет инлайн-стили Phaser.
+       max() реализует scale=max(sw/800,sh/450): canvas покрывает весь экран в любой ориентации,
+       центрируется по mid-point и обрезается overflow:hidden контейнера. */
     #game-container canvas {
-      display: block;
-      touch-action: none;
+      display: block !important;
+      touch-action: none !important;
       image-rendering: pixelated;
       image-rendering: crisp-edges;
+      position: fixed !important;
+      left: 50% !important;
+      top: 50% !important;
+      transform: translate(-50%, -50%) !important;
+      margin: 0 !important;
+      width:  max(100vw, calc(100vh * 800 / 450)) !important;
+      height: max(100vh, calc(100vw * 450 / 800)) !important;
     }
+    /* END_BLOCK_CANVAS_FULLSCREEN */
     /* END_BLOCK_RESET */
 
     /* START_BLOCK_PORTRAIT_SUPPORT: Поддержка вертикальной ориентации */
