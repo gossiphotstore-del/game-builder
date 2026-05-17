@@ -13,6 +13,12 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="theme-color" content="#1a1a2e" />
+  <!-- Telegram Mini App SDK: должен быть первым скриптом в head.
+       Активирует Telegram.WebApp API — expand() и requestFullscreen(). -->
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <title>Игра для {{PLAYER_NAME}}</title>
   <style>
     /* START_BLOCK_RESET: Базовый сброс стилей и полноэкранный игровой холст */
@@ -51,9 +57,11 @@
       overflow: hidden;
     }
 
-    /* START_BLOCK_CANVAS_FULLSCREEN: CSS ENVELOP через !important — переопределяет инлайн-стили Phaser.
-       max() реализует scale=max(sw/800,sh/450): canvas покрывает весь экран в любой ориентации,
-       центрируется по mid-point и обрезается overflow:hidden контейнера. */
+    /* START_BLOCK_CANVAS_FULLSCREEN: Позиционирование canvas — размеры задаются JS через fitCanvas().
+       BUG_FIX_CONTEXT: CSS max(var(), calc(var())) ненадёжно работает в Telegram WebView —
+       width/height могли не применяться, canvas оставался 800×450 (инлайн Phaser),
+       из-за чего в portrait появлялись чёрные полосы сверху/снизу.
+       Решение: JS fitCanvas() напрямую устанавливает width/height через style.setProperty('important'). */
     #game-container canvas {
       display: block !important;
       touch-action: none !important;
@@ -64,8 +72,6 @@
       top: 50% !important;
       transform: translate(-50%, -50%) !important;
       margin: 0 !important;
-      width:  max(100vw, calc(100vh * 800 / 450)) !important;
-      height: max(100vh, calc(100vw * 450 / 800)) !important;
     }
     /* END_BLOCK_CANVAS_FULLSCREEN */
     /* END_BLOCK_RESET */
@@ -127,6 +133,28 @@
     GAME_CONFIG инжектируется первым — до всех игровых скриптов.
   -->
 
+  <!-- START_BLOCK_VIEWPORT_INIT: Ранняя инициализация --fit-vw/vh до первого paint.
+       Предотвращает flash с неправильным размером на iOS Safari при первой загрузке.
+       Также запрашивает полный экран через Telegram WebApp API если открыто из Telegram. -->
+  <script>
+    // START_BLOCK_TELEGRAM_FULLSCREEN: Telegram Mini App — расширение на весь экран.
+    // expand() убирает Telegram header и занимает максимальную высоту.
+    // requestFullscreen() (Bot API 8.0+) даёт нативный полный экран без строки Telegram.
+    if (window.Telegram && window.Telegram.WebApp) {
+      var twa = window.Telegram.WebApp;
+      twa.ready();
+      twa.expand();
+      if (typeof twa.requestFullscreen === 'function') {
+        twa.requestFullscreen();
+      }
+      // После expand Telegram изменяет размер WebView → пересчитать масштаб canvas.
+      // Защита typeof: viewportChanged может сработать до определения fitCanvas (head vs body).
+      twa.onEvent('viewportChanged', function () { if (typeof fitCanvas === 'function') { fitCanvas(); } });
+    }
+    // END_BLOCK_TELEGRAM_FULLSCREEN
+  </script>
+  <!-- END_BLOCK_VIEWPORT_INIT -->
+
   <!-- GAME_CONFIG_INJECT -->
   <script>
   window.GAME_CONFIG = {
@@ -182,36 +210,64 @@
   <!-- END_BLOCK_SCRIPTS -->
 
   <script>
-    // START_BLOCK_FIT_CANVAS: CSS cover-масштабирование canvas — надёжная замена Phaser Scale.ENVELOP.
-    // Phaser Scale.ENVELOP некорректно работает на iOS Safari (читает viewport до layout).
-    // Scale.NONE + fitCanvas() вместо этого: вычисляем scale = max(sw/800, sh/450),
-    // задаём canvas CSS width/height/left/top явно. Phaser input корректно пересчитывает
-    // координаты через getBoundingClientRect() — touch/click-позиции не ломаются.
+    // START_BLOCK_FIT_CANVAS: ENVELOP-масштабирование canvas через JS.
+    // BUG_FIX_CONTEXT: CSS max(var(), calc(var())) ненадёжно работает в Telegram WebView —
+    // функция max() с вложенными var() может полностью игнорироваться браузером, из-за чего
+    // canvas оставался в нативных размерах Phaser (800×450px), а в portrait-режиме
+    // появлялись чёрные полосы сверху/снизу. Перенесено в JS: style.setProperty с 'important'
+    // гарантированно перебивает инлайн-стили Phaser в любом браузере.
     function fitCanvas() {
-      var canvas = document.querySelector('#game-container canvas');
-      if (!canvas) return;
-      var sw = window.innerWidth;
-      var sh = window.innerHeight;
-      var scale = Math.max(sw / 800, sh / 450);
-      var w = Math.round(800 * scale);
-      var h = Math.round(450 * scale);
-      canvas.style.position = 'absolute';
-      canvas.style.width    = w + 'px';
-      canvas.style.height   = h + 'px';
-      canvas.style.left     = Math.round((sw - w) / 2) + 'px';
-      canvas.style.top      = Math.round((sh - h) / 2) + 'px';
-      canvas.style.margin   = '0';
+      var vw = window.innerWidth;
+      var vh = window.innerHeight;
+      // ENVELOP: canvas покрывает весь экран, сохраняя ratio 800:450. Края обрезаются.
+      var w = Math.max(vw, Math.round(vh * 800 / 450));
+      var h = Math.max(vh, Math.round(vw * 450 / 800));
+
+      var canvases = document.querySelectorAll('#game-container canvas');
+      for (var i = 0; i < canvases.length; i++) {
+        canvases[i].style.setProperty('width',  w + 'px', 'important');
+        canvases[i].style.setProperty('height', h + 'px', 'important');
+      }
     }
 
+    // Запрашивает нативный fullscreen при первом тапе (Android Chrome).
+    // iOS Safari не поддерживает requestFullscreen — там работает только «На экран Домой».
+    function requestNativeFullscreen() {
+      var el = document.documentElement;
+      var fn = el.requestFullscreen || el.webkitRequestFullscreen || el.mozRequestFullScreen;
+      if (fn) {
+        fn.call(el).then(fitCanvas).catch(function () {});
+      }
+    }
+    document.addEventListener('pointerdown', function onFirstTap() {
+      document.removeEventListener('pointerdown', onFirstTap);
+      requestNativeFullscreen();
+    }, { once: true });
+
     window.addEventListener('load', function () {
+      fitCanvas();
+
+      // MutationObserver: вызвать fitCanvas сразу после появления canvas в DOM (Phaser создаёт его асинхронно)
+      var gc = document.getElementById('game-container');
+      if (gc) {
+        var obs = new MutationObserver(function () {
+          if (document.querySelector('#game-container canvas')) {
+            fitCanvas();
+            obs.disconnect();
+          }
+        });
+        obs.observe(gc, { childList: true, subtree: true });
+      }
+
       setTimeout(function () {
         var loadingScreen = document.getElementById('loading-screen');
         if (loadingScreen) { loadingScreen.classList.add('hidden'); }
       }, 300);
-      setTimeout(fitCanvas, 200);
-      setTimeout(fitCanvas, 600);
+      setTimeout(fitCanvas, 400);
     });
-    window.addEventListener('resize',            function () { setTimeout(fitCanvas, 200); });
+    window.addEventListener('fullscreenchange',        fitCanvas);
+    window.addEventListener('webkitfullscreenchange',  fitCanvas);
+    window.addEventListener('resize',                  fitCanvas);
     window.addEventListener('orientationchange', function () { setTimeout(fitCanvas, 300); });
     // END_BLOCK_FIT_CANVAS
   </script>
