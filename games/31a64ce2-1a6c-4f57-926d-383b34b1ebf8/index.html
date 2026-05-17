@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<!--
+  FILE: game/template.html
+  VERSION: 1.0.0
+  PURPOSE: Шаблон HTML-файла игры с плейсхолдерами для game_builder.py.
+           Двойные фигурные скобки (см. PLACEHOLDERS ниже) заменяются Python-скриптом при сборке.
+           Содержит блок инжекции window.GAME_CONFIG для динамической конфигурации.
+  SCOPE: Bootstrap — корневая оболочка приложения с поддержкой персонализации.
+  PLACEHOLDERS: Рита, https://gossiphotstore-del.github.io/game-builder/games/31a64ce2-1a6c-4f57-926d-383b34b1ebf8/sprites/hero.png, ,
+                false, love, f
+-->
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="theme-color" content="#1a1a2e" />
+  <!-- Telegram Mini App SDK: должен быть первым скриптом в head.
+       Активирует Telegram.WebApp API — expand() и requestFullscreen(). -->
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <title>Игра для Рита</title>
+  <style>
+    /* START_BLOCK_RESET: Базовый сброс стилей и полноэкранный игровой холст */
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #1a1a2e;
+    }
+
+    body {
+      font-family: 'Arial', sans-serif;
+      touch-action: none;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    /* BUG_FIX_CONTEXT: display:flex на контейнере конфликтовал с Phaser Scale.ENVELOP —
+       Phaser центрирует canvas через отрицательные margin (marginLeft/marginTop),
+       но отрицательные margins flex-item не дают нужного смещения. Также display:none
+       в portrait-режиме мешало Phaser измерять размеры контейнера.
+       Решение: position:fixed + overflow:hidden, без flex. Portrait-overlay поверх (z-index). */
+    #game-container {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+    }
+
+    /* START_BLOCK_CANVAS_FULLSCREEN: Позиционирование canvas — размеры задаются JS через fitCanvas().
+       BUG_FIX_CONTEXT: CSS max(var(), calc(var())) ненадёжно работает в Telegram WebView —
+       width/height могли не применяться, canvas оставался 800×450 (инлайн Phaser),
+       из-за чего в portrait появлялись чёрные полосы сверху/снизу.
+       Решение: JS fitCanvas() напрямую устанавливает width/height через style.setProperty('important'). */
+    #game-container canvas {
+      display: block !important;
+      touch-action: none !important;
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
+      position: fixed !important;
+      left: 50% !important;
+      top: 50% !important;
+      transform: translate(-50%, -50%) !important;
+      margin: 0 !important;
+    }
+    /* END_BLOCK_CANVAS_FULLSCREEN */
+    /* END_BLOCK_RESET */
+
+    /* START_BLOCK_PORTRAIT_SUPPORT: Поддержка вертикальной ориентации */
+    /* Масштабирование canvas управляется через fitCanvas() в JS — поддерживает любую ориентацию. */
+    /* END_BLOCK_PORTRAIT_SUPPORT */
+
+    /* START_BLOCK_LOADING: Индикатор загрузки до инициализации Phaser */
+    #loading-screen {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: #1a1a2e;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: #f0c040;
+      font-size: 24px;
+      z-index: 999;
+      transition: opacity 0.5s ease;
+    }
+
+    #loading-screen.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .loading-title {
+      font-size: 32px;
+      font-weight: bold;
+      margin-bottom: 16px;
+      text-shadow: 0 0 12px rgba(240, 192, 64, 0.8);
+    }
+
+    .loading-subtitle {
+      font-size: 16px;
+      color: #aaa;
+    }
+    /* END_BLOCK_LOADING */
+  </style>
+</head>
+<body>
+
+  <!-- START_BLOCK_DOM: Корневые DOM-элементы -->
+  <div id="loading-screen">
+    <div class="loading-title">Загружаем игру для Рита...</div>
+  </div>
+
+  <div id="game-container"></div>
+  <!-- END_BLOCK_DOM -->
+
+  <!-- START_BLOCK_SCRIPTS: Подключение Phaser и игровой логики -->
+  <!--
+    Порядок загрузки важен: GAME_CONFIG → Phaser → тексты → константы → системы → UI → сущности → сцены → main.
+    GAME_CONFIG инжектируется первым — до всех игровых скриптов.
+  -->
+
+  <!-- START_BLOCK_VIEWPORT_INIT: Ранняя инициализация --fit-vw/vh до первого paint.
+       Предотвращает flash с неправильным размером на iOS Safari при первой загрузке.
+       Также запрашивает полный экран через Telegram WebApp API если открыто из Telegram. -->
+  <script>
+    // START_BLOCK_TELEGRAM_FULLSCREEN: Telegram Mini App — расширение на весь экран.
+    // expand() убирает Telegram header и занимает максимальную высоту.
+    // requestFullscreen() (Bot API 8.0+) даёт нативный полный экран без строки Telegram.
+    if (window.Telegram && window.Telegram.WebApp) {
+      var twa = window.Telegram.WebApp;
+      twa.ready();
+      twa.expand();
+      if (typeof twa.requestFullscreen === 'function') {
+        twa.requestFullscreen();
+      }
+      // После expand Telegram изменяет размер WebView → пересчитать масштаб canvas.
+      // Защита typeof: viewportChanged может сработать до определения fitCanvas (head vs body).
+      twa.onEvent('viewportChanged', function () { if (typeof fitCanvas === 'function') { fitCanvas(); } });
+    }
+    // END_BLOCK_TELEGRAM_FULLSCREEN
+  </script>
+  <!-- END_BLOCK_VIEWPORT_INIT -->
+
+  <!-- GAME_CONFIG_INJECT -->
+  <script>
+  window.GAME_CONFIG = {
+    PLAYER_NAME:          "Рита",
+    HERO_SPRITE_URL:      "https://gossiphotstore-del.github.io/game-builder/games/31a64ce2-1a6c-4f57-926d-383b34b1ebf8/sprites/hero.png",
+    COMPANION_SPRITE_URL: "",
+    HAS_COMPANION:         false,
+    SCENARIO:             "love",
+    HERO_GENDER:          "f",
+    ASSETS_BASE:          "../../"
+  };
+  </script>
+  <!-- END_GAME_CONFIG_INJECT -->
+
+  <script src="https://cdn.jsdelivr.net/npm/phaser@3.80.1/dist/phaser.min.js"></script>
+
+  <!-- Статические ассеты лежат в корне gh-pages (src/, assets/).
+       HTML находится в games/{id}/index.html → ../../ ведёт к корню репозитория. -->
+
+  <!-- 1. Константы (нет зависимостей) -->
+  <script src="../../src/constants.js"></script>
+
+  <!-- 2. Гендерно-адаптированные тексты (зависит только от GAME_CONFIG) -->
+  <script src="../../src/data/texts.js"></script>
+
+  <!-- 3. Системы без зависимостей от сцен -->
+  <script src="../../src/systems/ScoreSystem.js"></script>
+  <script src="../../src/systems/MusicSystem.js"></script>
+
+  <!-- 4. UI-компоненты -->
+  <script src="../../src/ui/HUD.js"></script>
+  <script src="../../src/ui/Roulette.js"></script>
+
+  <!-- 5. Игровые сущности -->
+  <script src="../../src/entities/Player.js"></script>
+  <script src="../../src/entities/Obstacle.js"></script>
+  <script src="../../src/entities/Collectible.js"></script>
+
+  <!-- 6. Оставшиеся системы (зависят от сущностей) -->
+  <script src="../../src/systems/InputSystem.js"></script>
+  <script src="../../src/systems/SpawnSystem.js"></script>
+
+  <!-- 7. Сцены (зависят от всего выше) -->
+  <script src="../../src/scenes/BootScene.js"></script>
+  <script src="../../src/scenes/StartScene.js"></script>
+  <script src="../../src/scenes/GameScene.js"></script>
+  <script src="../../src/scenes/FinalScene.js"></script>
+  <script src="../../src/scenes/RouletteScene.js"></script>
+  <script src="../../src/scenes/EndScene.js"></script>
+
+  <!-- 8. Точка входа (последний) -->
+  <script src="../../src/main.js"></script>
+  <!-- END_BLOCK_SCRIPTS -->
+
+  <script>
+    // START_BLOCK_FIT_CANVAS: ENVELOP-масштабирование canvas через JS.
+    // BUG_FIX_CONTEXT: CSS max(var(), calc(var())) ненадёжно работает в Telegram WebView —
+    // функция max() с вложенными var() может полностью игнорироваться браузером, из-за чего
+    // canvas оставался в нативных размерах Phaser (800×450px), а в portrait-режиме
+    // появлялись чёрные полосы сверху/снизу. Перенесено в JS: style.setProperty с 'important'
+    // гарантированно перебивает инлайн-стили Phaser в любом браузере.
+    function fitCanvas() {
+      var vw = window.innerWidth;
+      var vh = window.innerHeight;
+      // ENVELOP: canvas покрывает весь экран, сохраняя ratio 800:450. Края обрезаются.
+      var w = Math.max(vw, Math.round(vh * 800 / 450));
+      var h = Math.max(vh, Math.round(vw * 450 / 800));
+
+      var canvases = document.querySelectorAll('#game-container canvas');
+      for (var i = 0; i < canvases.length; i++) {
+        canvases[i].style.setProperty('width',  w + 'px', 'important');
+        canvases[i].style.setProperty('height', h + 'px', 'important');
+      }
+    }
+
+    // Запрашивает нативный fullscreen при первом тапе (Android Chrome).
+    // iOS Safari не поддерживает requestFullscreen — там работает только «На экран Домой».
+    function requestNativeFullscreen() {
+      var el = document.documentElement;
+      var fn = el.requestFullscreen || el.webkitRequestFullscreen || el.mozRequestFullScreen;
+      if (fn) {
+        fn.call(el).then(fitCanvas).catch(function () {});
+      }
+    }
+    document.addEventListener('pointerdown', function onFirstTap() {
+      document.removeEventListener('pointerdown', onFirstTap);
+      requestNativeFullscreen();
+    }, { once: true });
+
+    window.addEventListener('load', function () {
+      fitCanvas();
+
+      // MutationObserver: вызвать fitCanvas сразу после появления canvas в DOM (Phaser создаёт его асинхронно)
+      var gc = document.getElementById('game-container');
+      if (gc) {
+        var obs = new MutationObserver(function () {
+          if (document.querySelector('#game-container canvas')) {
+            fitCanvas();
+            obs.disconnect();
+          }
+        });
+        obs.observe(gc, { childList: true, subtree: true });
+      }
+
+      setTimeout(function () {
+        var loadingScreen = document.getElementById('loading-screen');
+        if (loadingScreen) { loadingScreen.classList.add('hidden'); }
+      }, 300);
+      setTimeout(fitCanvas, 400);
+    });
+    window.addEventListener('fullscreenchange',        fitCanvas);
+    window.addEventListener('webkitfullscreenchange',  fitCanvas);
+    window.addEventListener('resize',                  fitCanvas);
+    window.addEventListener('orientationchange', function () { setTimeout(fitCanvas, 300); });
+    // END_BLOCK_FIT_CANVAS
+  </script>
+
+</body>
+</html>
