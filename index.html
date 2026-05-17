@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<!--
+  FILE: index.html
+  VERSION: 1.0.0
+  PURPOSE: Главный HTML-файл игры «Поздравление для Романа».
+           Загружает Phaser 3 из node_modules и точку входа src/main.js.
+  SCOPE: Bootstrap — корневая оболочка приложения.
+-->
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <title>Игра для Романа</title>
+  <style>
+    /* START_BLOCK_RESET: Базовый сброс стилей и полноэкранный игровой холст */
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #1a1a2e;
+    }
+
+    body {
+      font-family: 'Arial', sans-serif;
+      touch-action: none;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    /* BUG_FIX_CONTEXT: display:flex на контейнере конфликтовал с Phaser Scale.ENVELOP —
+       Phaser центрирует canvas через отрицательные margin (marginLeft/marginTop),
+       но отрицательные margins flex-item не дают нужного смещения.
+       Решение: position:fixed + overflow:hidden, без flex. */
+    #game-container {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+    }
+
+    /* START_BLOCK_CANVAS_FULLSCREEN: CSS ENVELOP через !important — переопределяет инлайн-стили Phaser.
+       max() реализует scale=max(sw/800,sh/450): canvas покрывает весь экран в любой ориентации,
+       центрируется по mid-point и обрезается overflow:hidden контейнера. */
+    #game-container canvas {
+      display: block !important;
+      touch-action: none !important;
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
+      position: fixed !important;
+      left: 50% !important;
+      top: 50% !important;
+      transform: translate(-50%, -50%) !important;
+      margin: 0 !important;
+      width:  max(100vw, calc(100vh * 800 / 450)) !important;
+      height: max(100vh, calc(100vw * 450 / 800)) !important;
+    }
+    /* END_BLOCK_CANVAS_FULLSCREEN */
+    /* END_BLOCK_RESET */
+
+    /* START_BLOCK_PORTRAIT_SUPPORT: Поддержка вертикальной ориентации */
+    /* Scale.ENVELOP масштабирует canvas чтобы покрыть весь экран в любой ориентации.
+       Камера в GameScene следует за игроком — контент всегда в центре видимой области. */
+    /* END_BLOCK_PORTRAIT_SUPPORT */
+
+    /* START_BLOCK_LOADING: Индикатор загрузки до инициализации Phaser */
+    #loading-screen {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: #1a1a2e;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: #f0c040;
+      font-size: 24px;
+      z-index: 999;
+      transition: opacity 0.5s ease;
+    }
+
+    #loading-screen.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .loading-title {
+      font-size: 32px;
+      font-weight: bold;
+      margin-bottom: 16px;
+      text-shadow: 0 0 12px rgba(240, 192, 64, 0.8);
+    }
+
+    .loading-subtitle {
+      font-size: 16px;
+      color: #aaa;
+    }
+    /* END_BLOCK_LOADING */
+  </style>
+</head>
+<body>
+
+  <!-- START_BLOCK_DOM: Корневые DOM-элементы -->
+  <div id="loading-screen">
+    <div class="loading-title">Загрузка игры...</div>
+  </div>
+
+  <div id="game-container"></div>
+  <!-- END_BLOCK_DOM -->
+
+  <!-- START_BLOCK_SCRIPTS: Подключение Phaser и игровой логики -->
+  <!--
+    Порядок загрузки важен: Phaser → константы → системы → UI → сущности → сцены → main.
+    Phaser 3 из node_modules (для разработки через live-server из корня).
+  -->
+  <script src="https://cdn.jsdelivr.net/npm/phaser@3.80.1/dist/phaser.min.js"></script>
+
+  <!-- 1. Константы (нет зависимостей) -->
+  <script src="src/constants.js"></script>
+
+  <!-- 2. Гендерно-адаптированные тексты -->
+  <script src="src/data/texts.js"></script>
+
+  <!-- 3. Системы без зависимостей от сцен -->
+  <script src="src/systems/ScoreSystem.js"></script>
+  <script src="src/systems/MusicSystem.js"></script>
+
+  <!-- 4. UI-компоненты -->
+  <script src="src/ui/HUD.js"></script>
+  <script src="src/ui/Roulette.js"></script>
+
+  <!-- 4. Игровые сущности -->
+  <script src="src/entities/Player.js"></script>
+  <script src="src/entities/Obstacle.js"></script>
+  <script src="src/entities/Collectible.js"></script>
+
+  <!-- 5. Оставшиеся системы (зависят от сущностей) -->
+  <script src="src/systems/InputSystem.js"></script>
+  <script src="src/systems/SpawnSystem.js"></script>
+
+  <!-- 6. Сцены (зависят от всего выше) -->
+  <script src="src/scenes/BootScene.js"></script>
+  <script src="src/scenes/StartScene.js"></script>
+  <script src="src/scenes/GameScene.js"></script>
+  <script src="src/scenes/FinalScene.js"></script>
+  <script src="src/scenes/RouletteScene.js"></script>
+  <script src="src/scenes/EndScene.js"></script>
+
+  <!-- 7. Точка входа (последний) -->
+  <script src="src/main.js"></script>
+  <!-- END_BLOCK_SCRIPTS -->
+
+  <script>
+    // START_BLOCK_FIT_CANVAS: CSS cover-масштабирование canvas — надёжная замена Phaser Scale.ENVELOP.
+    // Phaser Scale.ENVELOP некорректно работает на iOS Safari (читает viewport до layout).
+    // Scale.NONE + fitCanvas() вместо этого: вычисляем scale = max(sw/800, sh/450),
+    // задаём canvas CSS width/height/left/top явно. Phaser input корректно пересчитывает
+    // координаты через getBoundingClientRect() — touch/click-позиции не ломаются.
+    function fitCanvas() {
+      var canvas = document.querySelector('#game-container canvas');
+      if (!canvas) return;
+      var sw = window.innerWidth;
+      var sh = window.innerHeight;
+      var scale = Math.max(sw / 800, sh / 450);
+      var w = Math.round(800 * scale);
+      var h = Math.round(450 * scale);
+      canvas.style.position = 'absolute';
+      canvas.style.width    = w + 'px';
+      canvas.style.height   = h + 'px';
+      canvas.style.left     = Math.round((sw - w) / 2) + 'px';
+      canvas.style.top      = Math.round((sh - h) / 2) + 'px';
+      canvas.style.margin   = '0';
+    }
+
+    window.addEventListener('load', function () {
+      setTimeout(function () {
+        var loadingScreen = document.getElementById('loading-screen');
+        if (loadingScreen) { loadingScreen.classList.add('hidden'); }
+      }, 300);
+      setTimeout(fitCanvas, 200);
+      setTimeout(fitCanvas, 600);
+    });
+    window.addEventListener('resize',            function () { setTimeout(fitCanvas, 200); });
+    window.addEventListener('orientationchange', function () { setTimeout(fitCanvas, 300); });
+    // END_BLOCK_FIT_CANVAS
+  </script>
+
+</body>
+</html>
